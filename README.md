@@ -54,31 +54,31 @@ A filosofia por trás do Event Horizon é simples: **Não pague a IA para fazer 
 
 ```mermaid
 flowchart TD
-    User([Usuário faz pedido complexo]) --> Router{Flash-Lite Sandwich}
+    User(["Usuário faz pedido complexo"]) --> Router{"Flash-Lite Sandwich"}
     
-    Router -- Tarefa Trivial / Formatação --> Ollama[Local DeepSeek Router]
-    Ollama --> Output[Resposta Imediata ($0)]
+    Router -- "Tarefa Trivial / Formatação" --> Ollama["Local DeepSeek Router"]
+    Ollama --> Output["Resposta Imediata ($0)"]
     
-    Router -- Refatoração Massiva --> MCP[Jules Batch Delegator]
-    MCP --> Background[Agente em Background via MCP]
+    Router -- "Refatoração Massiva" --> MCP["Jules Batch Delegator"]
+    MCP --> Background["Agente em Background via MCP"]
     
-    Router -- Lógica Complexa --> Pro[Gemini Pro - Arquiteto]
+    Router -- "Lógica Complexa" --> Pro["Gemini Pro - Arquiteto"]
     
-    Pro --> SDD[Spec-Driven Enforcer]
-    SDD -.->|Aprovação do User| Scout[The Scout / Librarian]
+    Pro --> SDD["Spec-Driven Enforcer"]
+    SDD -.->|"Aprovação do User"| Scout["The Scout / Librarian"]
     
-    Scout --> AST[Dependency Compiler / AST Search]
-    AST -.->|Impact Map 90% menor| Pro
+    Scout --> AST["Dependency Compiler / AST Search"]
+    AST -.->|"Impact Map 90% menor"| Pro
     
-    Pro --> TDD[TDD Enforcer]
-    TDD --> Code[Gera Código Patch via Ponytail]
+    Pro --> TDD["TDD Enforcer"]
+    TDD --> Code["Gera Código Patch via Ponytail"]
     
-    Code --> Audit{Adversarial Sparring}
-    Audit -- Falhou --> Flash[Subagente Crítico corrige]
+    Code --> Audit{"Adversarial Sparring"}
+    Audit -- "Falhou" --> Flash["Subagente Crítico corrige"]
     Flash --> Code
-    Audit -- Passou --> Post[Living Memory]
+    Audit -- "Passou" --> Post["Living Memory"]
     
-    Post --> Doc[Atualiza CHANGELOG/ARCH]
+    Post --> Doc["Atualiza CHANGELOG/ARCH"]
 ```
 
 ---
