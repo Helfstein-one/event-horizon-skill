@@ -1,5 +1,9 @@
 # 🕳️ Event Horizon Skill
 
+<p align="center">
+  <img src="assets/logo.jpg" alt="Event Horizon Logo" width="600"/>
+</p>
+
 **Event Horizon** é um pacote definitivo de otimização arquitetural e de redução de tokens para agentes de IA (especialmente **Gemini** e o ecossistema **Google Antigravity**). 
 
 Este repositório compila as técnicas mais agressivas de economia de contexto, prevenção de alucinação e delegação assíncrona, transformando um LLM gastão em um engenheiro de software cirúrgico e focado.
