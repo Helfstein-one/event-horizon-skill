@@ -11,3 +11,7 @@ description: Spawns a council of specialized subagents to review critical code c
    - Subagent A (`Role: 'Security Auditor'`): Focuses strictly on vulnerabilities and edge cases.
    - Subagent B (`Role: 'Performance/Logic Architect'`): Focuses strictly on Big O complexity, token-efficiency, and clean code.
 3. Wait for both agents to report back. Resolve any conflicting feedback before finalizing the implementation.
+
+## Integração Event Horizon
+- Usado no EVALUATE do `hypothesis-loop-engineer` para conclusões críticas/irreversíveis.
+- Cada revisor recebe persona `Reviewer` com uma lente distinta (`persona-forge`).

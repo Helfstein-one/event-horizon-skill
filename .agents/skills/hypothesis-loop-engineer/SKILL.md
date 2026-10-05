@@ -1,78 +1,97 @@
 ---
 name: hypothesis-loop-engineer
-description: CoALA-based discovery loop (Hypothesis → Evidence → Confirmation) with pooled parallel evidence collectors. Use for discovery, data mapping, legacy modernization, and refactoring where the system is not yet understood.
+description: Domain-agnostic CoALA reasoning loop (Hypothesis → Evidence → Confirmation) for any task with high uncertainty — debugging, investigation, research, architecture decisions, performance, incidents, unfamiliar codebases or systems. Orchestrates the other Event Horizon skills as evidence tools, evaluators and memory.
 ---
 
-# Hypothesis Loop Engineer (CoALA Discovery Loop)
+# Hypothesis Loop Engineer
 
-Ciclo de descoberta baseado em **CoALA** (Cognitive Architectures for Language Agents): memória modular + ciclo de decisão explícito. Substitui "ler tudo e adivinhar" por **hipóteses testáveis confirmadas por evidência**.
+Motor de incerteza do Event Horizon. Baseado em **CoALA** (*Cognitive Architectures for Language Agents*): memória modular + ciclo de decisão explícito.
 
-## Quando usar
-- Discovery de sistema legado desconhecido.
-- Data mapping (origem → destino, linhagem, regras de transformação).
-- Modernização / refatoração (fronteiras de módulos, acoplamento, código morto).
-- Qualquer tarefa onde a resposta certa depende de fatos ainda não verificados.
+**Princípio:** nenhuma ação relevante é tomada sobre suposição. Toda suposição vira hipótese falsificável, é testada com a evidência mais barata possível e só vira fato após confirmação.
+
+## Quando ativar
+
+Ativado pela regra `uncertainty-router` ou explicitamente. Use quando **qualquer** for verdade:
+- A causa, a resposta ou o caminho certo é desconhecido.
+- Há ≥2 explicações plausíveis concorrentes.
+- `react-protocol` falhou em confirmar uma hipótese 2 vezes seguidas.
+- O custo de errar (retrabalho, quebra, decisão irreversível) é alto.
+
+**Não** use para tarefas determinísticas e claras — isso é desperdício.
 
 ## Memória (CoALA)
 
-| Memória | Onde | Conteúdo |
+| Memória | Arquivo | Regra |
 | :--- | :--- | :--- |
-| Working | `.agents/discovery/<tema>/board.md` | Hipóteses ativas, status, confiança |
-| Episodic | `.agents/discovery/<tema>/loop-log.md` | Uma linha por iteração: o que foi testado e o resultado |
-| Semantic | `.agents/discovery/<tema>/knowledge.md` | Fatos **confirmados** (com fonte). Só entra aqui o que passou na confirmação |
-| Procedural | `.agents/skills/*`, `bin/*` | Como coletar evidência: `ast-search`, `rtk`, `schema-dumper`, `log-tailer` |
+| Working | `.agents/loops/<slug>/board.md` | Hipóteses ativas, status, confiança |
+| Episodic | `.agents/loops/<slug>/log.md` | 1 linha por iteração |
+| Semantic | `.agents/loops/<slug>/knowledge.md` | Só fatos confirmados, com fonte |
+| Procedural | skills + `bin/*` | Ferramentas de evidência (tabela abaixo) |
 
-> Ler `knowledge.md` + `board.md` no início de cada iteração. **Não** reler o histórico do chat (compatível com `stateless-relay`).
+No início de cada iteração, ler **apenas** `knowledge.md` + `board.md` (não o histórico do chat). Isso implementa `stateless-relay`.
 
-## Ciclo de decisão
+## Ciclo
 
 ```text
-OBSERVE → HYPOTHESIZE → PLAN → POOL (coleta paralela) → EVALUATE → COMMIT MEMORY → (loop | exit)
+FRAME → OBSERVE → HYPOTHESIZE → PLAN → POOL → EVALUATE → COMMIT → (loop | EXIT → HANDOFF)
 ```
 
-1. **OBSERVE** — Ler memória semântica e board. Coletar sinais iniciais baratos (estrutura de diretórios, `ast-search`, schema).
-2. **HYPOTHESIZE** — Gerar 3–7 hipóteses **falsificáveis**. Formato: `H<n>: <afirmação> | se verdadeira, espero ver <evidência X> | se falsa, espero ver <Y>`.
-3. **PLAN** — Para cada hipótese, definir a evidência mínima e a ferramenta. Priorizar por `impacto × incerteza`.
-4. **POOL** — Disparar em **um único** `invoke_subagent` um pool de `Evidence Collector` (`flash_lite`/`flash`, somente leitura), uma hipótese por worker. Persona via `persona-forge`. Contrato de saída:
-   `| H | evidência | fonte(arquivo:linha / tabela.coluna / log) | suporta? (sim/não/parcial) |`
-5. **EVALUATE** — Enviar evidências ao `Hypothesis Skeptic`, que tenta refutar. Classificar:
-   - ✅ **Confirmada** — ≥2 evidências independentes, nenhuma contra, confiança ≥ 0.8
-   - ❌ **Refutada** — evidência contrária direta
-   - ⚠️ **Inconclusiva** — refinar hipótese ou pedir evidência mais específica
-6. **COMMIT MEMORY** — Confirmadas → `knowledge.md`. Atualizar `board.md`. Anexar 1 linha em `loop-log.md`. Gerar novas hipóteses derivadas.
-7. **EXIT** quando qualquer um:
-   - Todas as hipóteses críticas confirmadas/refutadas;
-   - Máximo de **5 iterações**;
-   - Duas iterações seguidas sem novo fato confirmado (estagnação) → perguntar ao usuário.
+1. **FRAME** — Escrever a pergunta central em uma frase e o critério de "resolvido". Ex: *"Por que a latência p95 subiu? Resolvido = causa confirmada + correção validada."*
+2. **OBSERVE** — Sinais baratos primeiro (estrutura, assinaturas, últimas linhas de log, métricas agregadas).
+3. **HYPOTHESIZE** — 3–7 hipóteses falsificáveis e mutuamente distinguíveis:
+   `H<n>: <afirmação> | se V, espero <sinal A> | se F, espero <sinal B> | custo de teste: baixo/médio/alto`
+4. **PLAN** — Ordenar por `impacto × incerteza ÷ custo`. Escolher o **teste discriminante**: a evidência que separa o maior número de hipóteses de uma vez.
+5. **POOL** — Coleta paralela via `parallel-swarm-orchestrator`: um `Evidence Collector` (persona via `persona-forge`, somente leitura, `flash_lite`/`flash`) por hipótese, num único `invoke_subagent`.
+   Contrato: `| H | evidência | tipo | fonte | suporta (S/N/P) |`
+6. **EVALUATE** — `Skeptic` (via `adversarial-sparring`; para decisões críticas, `reviewer-council`) tenta refutar.
+   - ✅ Confirmada: ≥2 evidências independentes de tipos diferentes, nenhuma contrária, confiança ≥ 0.8
+   - ❌ Refutada: contra-evidência direta
+   - ⚠️ Inconclusiva: refinar hipótese ou buscar evidência mais discriminante
+7. **COMMIT** — Confirmadas → `knowledge.md`. Atualizar `board.md`. 1 linha em `log.md`. Gerar hipóteses derivadas.
+8. **EXIT** quando: critério do FRAME atingido | 5 iterações | 2 iterações sem fato novo (→ `ask_question` ao usuário com o board atual).
+9. **HANDOFF** — Ver seção de integração.
 
-## Formato do board
+## Tipos de evidência (agnóstico)
 
+| Tipo | Exemplos | Ferramentas Event Horizon |
+| :--- | :--- | :--- |
+| Estática | Código, configs, schemas, contratos | `ast-search`, `dependency-compiler`, `scout-librarian`, `schema-dumper` |
+| Dinâmica | Executar, reproduzir, teste que falha/passa | `tdd-enforcer`, `run_command` + `rtk` |
+| Observacional | Logs, métricas, traces | `log-tailer`, `rtk` |
+| Documental | Docs, issues, changelog, web | `living-memory` (docs do projeto), `search_web` |
+| Humana | Confirmação do usuário/time | `ask_question` |
+
+Preferir evidência **dinâmica** quando possível: um teste reproduzível vale mais que leitura de código.
+
+## Integração com o pacote
+
+| Skill / Regra | Papel no loop |
+| :--- | :--- |
+| `uncertainty-router` | Decide quando entrar no loop |
+| `react-protocol` | Micro-ciclo de 1 hipótese; escala para este loop após 2 falhas |
+| `persona-forge` | Define Evidence Collector, Skeptic, Synthesizer |
+| `parallel-swarm-orchestrator` | Executa o POOL |
+| `scout-librarian`, `ast-search`, `dependency-compiler`, `schema-dumper`, `log-tailer`, `rtk` | Coleta de evidência barata |
+| `tdd-enforcer` | Evidência dinâmica: teste que reproduz = hipótese confirmada |
+| `adversarial-sparring`, `reviewer-council` | EVALUATE |
+| `stateless-relay` | Memória em arquivo substitui histórico |
+| `flash-lite-sandwich`, `local-deepseek-router` | Coletores e classificações baratas |
+| `jules-batch-delegator` | Coleta massiva (ex: varrer centenas de arquivos) vai para o Jules |
+| `spec-driven-enforcer` | HANDOFF: `knowledge.md` vira base da spec |
+| `living-memory` | HANDOFF: fatos duráveis promovidos para `ARCHITECTURE.md`/docs |
+
+## Handoff
+
+Ao sair, gerar `.agents/loops/<slug>/conclusion.md`:
 ```markdown
-| ID | Hipótese | Evidência esperada | Status | Conf. | Fontes |
-| :- | :------- | :----------------- | :----- | :---: | :----- |
-| H1 | `customer.status` legado mapeia para `account.state` | CASE em proc `sp_sync` | ✅ | 0.9 | sp_sync.sql:42, etl/map.py:17 |
-| H2 | Módulo `billing` não depende de `crm` | sem imports cruzados | ❌ | — | billing/api.ts:8 importa crm |
+## Pergunta
+## Resposta (fatos confirmados + confiança)
+## Hipóteses refutadas (para não reinvestigar)
+## Lacunas abertas
+## Próxima ação → [spec-driven-enforcer | tdd-enforcer + ponytail | ask_question]
 ```
 
-## Modos de aplicação
-
-### Data mapping
-- Hipóteses típicas: correspondência de campos, regras de transformação, chaves de junção, cardinalidade, campos órfãos, PII.
-- Evidência: `schema-dumper`, SQL de procedures/ETL, código de serialização, contagens agregadas (nunca linhas brutas).
-- Entregável: `mapping.md` com `| origem | destino | transformação | regra | evidência | confiança |` + lista de lacunas.
-
-### Modernização
-- Hipóteses típicas: fronteiras de bounded context, módulos isoláveis (candidatos a strangler fig), código morto, regras de negócio escondidas.
-- Evidência: grafo de imports (`ast-search`), rotas/entrypoints, logs de uso (`log-tailer`), testes existentes.
-- Entregável: mapa de módulos + ordem de extração + riscos → entrada para `Migration Architect`.
-
-### Refatoração
-- Hipóteses típicas: "função X tem efeitos colaterais em Y", "dá para extrair interface Z sem quebrar chamadores".
-- Evidência: `scout-librarian` (impact map), testes de caracterização (`tdd-enforcer`).
-- Entregável: plano de patches confirmado → `Refactor Surgeon`.
-
-## Regras de economia
-- Coletores são **somente leitura** e com limite de tool calls (≤10).
-- Evidência sempre com fonte curta (`arquivo:linha`), nunca blocos de código inteiros.
-- Hipótese confirmada nunca é re-investigada; vive em `knowledge.md`.
-- Use `json-optimizer` / tabelas compactas entre agentes.
+## Economia
+- Coletores: somente leitura, ≤10 tool calls, fonte curta (`arquivo:linha`, `métrica@timestamp`), nunca blocos inteiros.
+- Fato confirmado nunca é reinvestigado. Hipótese refutada fica registrada.
+- Teste discriminante primeiro: elimina várias hipóteses por iteração.

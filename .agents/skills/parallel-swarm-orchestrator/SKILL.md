@@ -13,3 +13,7 @@ description: Detects parallelizable tasks and deploys a swarm of concurrent suba
 3. Act as the **Orchestrator**. Use the `invoke_subagent` tool and pass an array of multiple subagents in a single tool call to launch them concurrently.
 4. Assign `Model: 'flash'` to the worker subagents to save cost and speed up execution.
 5. Wait for all subagents to report back via messages, aggregate their work, and present the final unified output.
+
+## Integração Event Horizon
+- Executa o passo POOL do `hypothesis-loop-engineer` (1 Evidence Collector por hipótese).
+- Toda subagente recebe persona via `persona-forge`.

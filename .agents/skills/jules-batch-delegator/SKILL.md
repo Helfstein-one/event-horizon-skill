@@ -14,3 +14,6 @@ description: Delegates heavy, asynchronous, and batch tasks to Jules AI via the 
 4. Execute the tool `jules_create_session` (provided by the `google-jules` MCP integration) to create an asynchronous working session.
 5. Provide a highly detailed prompt/title in the session payload, including references to specific files or directories Jules should focus on.
 6. Once the session is spawned, inform the user that Jules is working on the task in the background, effectively saving tokens and synchronous compute time on your end.
+
+## Integração Event Horizon
+- Coleta de evidência massiva no `hypothesis-loop-engineer` (ex: varrer centenas de arquivos) pode ser delegada ao Jules.
