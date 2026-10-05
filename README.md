@@ -248,4 +248,4 @@ brew install ollama && ollama pull deepseek-coder
 
 ## 📄 Licença
 
-MIT
+[MIT](./LICENSE)
