@@ -39,7 +39,9 @@ event-horizon-skill/
         ├── react-protocol/
         ├── schema-dumper/
         ├── scout-librarian/
-        └── spec-driven-enforcer/
+        ├── spec-driven-enforcer/
+        ├── parallel-swarm-orchestrator/
+        └── reviewer-council/
 ```
 
 ---
