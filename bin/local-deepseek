@@ -1,0 +1,18 @@
+#!/bin/bash
+# Wrapper to query local Ollama (DeepSeek)
+# Usage: local-deepseek "Prompt here"
+
+if [ -z "$1" ]; then
+  echo "Usage: local-deepseek <prompt>"
+  exit 1
+fi
+
+PROMPT="$1"
+
+# Query Ollama API locally (assuming default port 11434 and a generic deepseek-coder model name)
+# Feel free to change the model name to exactly what you have pulled (e.g. deepseek-coder:6.7b)
+curl -s -X POST http://localhost:11434/api/generate -d '{
+  "model": "deepseek-coder",
+  "prompt": "'"${PROMPT//\"/\\\"}"'",
+  "stream": false
+}' | grep -o '"response":"[^"]*' | sed 's/"response":"//' | sed 's/\\n/\n/g' | sed 's/\\"/"/g'

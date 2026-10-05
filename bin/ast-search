@@ -1,0 +1,17 @@
+#!/bin/bash
+# AST Search Proxy
+# Dumps only function/class signatures from code files to save context tokens.
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: ast-search <directory or file>"
+    exit 1
+fi
+
+TARGET="$1"
+
+# Uses ripgrep if installed, fallback to grep
+if command -v rg &> /dev/null; then
+    rg -n '^(def |class |function |interface |type |export (const|function|class)|func )' "$TARGET"
+else
+    grep -rnE '^(def |class |function |interface |type |export (const|function|class)|func )' "$TARGET"
+fi

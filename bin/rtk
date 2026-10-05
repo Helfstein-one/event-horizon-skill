@@ -1,0 +1,26 @@
+#!/bin/bash
+# RTK (Rust Token Killer) - Bash Port for Token Optimization
+# Truncates noisy terminal output to save LLM context tokens.
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: rtk <command>"
+    exit 1
+fi
+
+# Run the command and capture output to a variable to avoid double printing
+# Using a temp file to preserve formatting and stderr
+
+TMP_FILE=$(mktemp)
+"$@" > "$TMP_FILE" 2>&1
+
+LINES=$(wc -l < "$TMP_FILE" | tr -d ' ')
+
+if [ "$LINES" -gt 150 ]; then
+    head -n 50 "$TMP_FILE"
+    echo -e "\n... [RTK: $((LINES - 100)) lines truncated to save context tokens] ...\n"
+    tail -n 50 "$TMP_FILE"
+else
+    cat "$TMP_FILE"
+fi
+
+rm -f "$TMP_FILE"
