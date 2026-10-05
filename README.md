@@ -16,6 +16,7 @@
 - [Arquitetura do Repositório](#-arquitetura-do-repositório)
 - [Diagrama de Fluxo](#-diagrama-de-fluxo)
 - [Arquitetura Multi-Agente (Swarm)](#-arquitetura-multi-agente-swarm)
+- [Hypothesis Loop Engineer (CoALA)](#-hypothesis-loop-engineer-coala)
 - [Catálogo Completo](#-catálogo-completo)
 - [Benchmark](#-benchmark)
 - [Instalação](#%EF%B8%8F-instalação)
@@ -72,7 +73,9 @@ event-horizon-skill/
         ├── react-protocol/          # Cognição
         ├── living-memory/           # Memória
         ├── parallel-swarm-orchestrator/  # Multi-agente
-        └── reviewer-council/        # Multi-agente
+        ├── reviewer-council/        # Multi-agente
+        ├── persona-forge/           # Multi-agente (papéis)
+        └── hypothesis-loop-engineer/ # Discovery (CoALA)
 ```
 
 ---
@@ -151,6 +154,69 @@ sequenceDiagram
 | Security Auditor | Flash | Vulnerabilidades, edge cases |
 | Performance Architect | Flash | Complexidade, clareza, eficiência |
 
+### 🎭 Personas (`persona-forge`)
+
+Cada subagente recebe um **contrato de papel**: missão, escopo, proibições, método, formato de saída e limite. Isso molda o foco do agente, evita sobreposição e padroniza a saída para agregação barata.
+
+| Persona | Modelo | Papel |
+| :--- | :--- | :--- |
+| Orchestrator | Pro | Decompõe, atribui personas, decide |
+| Legacy Archaeologist | Flash | Módulos, acoplamento, código morto, regras implícitas |
+| Data Cartographer | Flash | Schemas, linhagem, mapeamento origem → destino |
+| Domain Modeler | Pro | Entidades, bounded contexts, glossário |
+| Evidence Collector | Flash-Lite | Coleta fatos pontuais com fonte |
+| Hypothesis Skeptic | Flash | Tenta refutar hipóteses |
+| Migration Architect | Pro | Estratégia (strangler fig), fases, rollback |
+| Test Strategist | Flash | Testes de caracterização |
+| Refactor Surgeon | Flash | Patches mínimos após aprovação |
+
+```text
+PERSONA: Data Cartographer
+MISSÃO: mapear legacy.invoices → billing.invoice_v2
+ESCOPO: db/legacy/*.sql, src/billing/**
+PROIBIDO: editar arquivos; SELECT em dados
+MÉTODO: schema-dumper, ast-search
+SAÍDA: | origem | destino | transformação | evidência | confiança |
+LIMITE: 15 tool calls
+```
+
+---
+
+## 🔬 Hypothesis Loop Engineer (CoALA)
+
+Loop de descoberta baseado em **CoALA** (*Cognitive Architectures for Language Agents*): memória modular + ciclo de decisão explícito. Em vez de "ler tudo e adivinhar", o agente formula **hipóteses falsificáveis**, faz um **pool paralelo de coletores de evidência** e só registra como fato o que passa na **confirmação**.
+
+```mermaid
+flowchart LR
+    O["OBSERVE - memória + sinais baratos"] --> H["HYPOTHESIZE - 3 a 7 hipóteses falsificáveis"]
+    H --> P["PLAN - evidência mínima por hipótese"]
+    P --> POOL["POOL - Evidence Collectors em paralelo"]
+    POOL --> E{"EVALUATE - Hypothesis Skeptic"}
+    E -- "Confirmada" --> K["knowledge.md"]
+    E -- "Refutada" --> B["board.md"]
+    E -- "Inconclusiva" --> H
+    K --> X{"Critério de saída?"}
+    B --> X
+    X -- "Não" --> O
+    X -- "Sim" --> D["Entregável: mapping.md / plano de migração"]
+```
+
+| Memória CoALA | Arquivo |
+| :--- | :--- |
+| Working | `.agents/discovery/<tema>/board.md` |
+| Episodic | `.agents/discovery/<tema>/loop-log.md` |
+| Semantic | `.agents/discovery/<tema>/knowledge.md` (só fatos confirmados) |
+| Procedural | skills + `bin/*` |
+
+**Confirmação:** ≥2 evidências independentes, nenhuma contrária, confiança ≥ 0.8.
+**Saída do loop:** hipóteses críticas resolvidas, 5 iterações, ou 2 iterações sem fato novo (pergunta ao usuário).
+
+| Modo | Hipóteses típicas | Entregável |
+| :--- | :--- | :--- |
+| Data mapping | Correspondência de campos, transformações, chaves, PII | `mapping.md` + lacunas |
+| Modernização | Bounded contexts, módulos isoláveis, código morto | Mapa de módulos + ordem de extração |
+| Refatoração | Efeitos colaterais, extração de interface segura | Plano de patches confirmado |
+
 ---
 
 ## 📚 Catálogo Completo
@@ -181,6 +247,8 @@ sequenceDiagram
 | Living Memory | Skill | Memória | Docs atualizados = menos releitura futura |
 | Parallel Swarm Orchestrator | Skill | Multi-agente | Paralelismo com workers Flash |
 | Reviewer Council | Skill | Multi-agente | Revisão especializada concorrente |
+| Persona Forge | Skill | Multi-agente | Papéis com escopo e saída fixos = menos ruído entre agentes |
+| Hypothesis Loop Engineer | Skill | Discovery | Investiga só o necessário para confirmar/refutar; fatos confirmados nunca são re-lidos |
 
 ---
 
@@ -301,7 +369,8 @@ No chat do Antigravity, pergunte: *"quais skills você tem disponíveis?"* — a
 rm -rf ~/.gemini/config/.agents/rules/{ponytail,subagent-routing,flash-lite-sandwich,stateless-relay,json-optimizer,context-caching}.md
 cd ~/.gemini/config/.agents/skills && rm -rf log-tailer schema-dumper dependency-compiler pre-linter \
   commit-summarizer local-deepseek-router jules-batch-delegator tdd-enforcer adversarial-sparring \
-  spec-driven-enforcer scout-librarian react-protocol living-memory parallel-swarm-orchestrator reviewer-council
+  spec-driven-enforcer scout-librarian react-protocol living-memory parallel-swarm-orchestrator reviewer-council \
+  persona-forge hypothesis-loop-engineer
 rm -f ~/.local/bin/{rtk,ast-search,local-deepseek}
 rm -f ~/.gemini/config/AGENTS.md   # ou restaure o backup
 ```
@@ -399,6 +468,34 @@ Exemplos de prompts e quais componentes entram em ação. Você não precisa cha
 | Após ~5 iterações, grava `state_summary.txt` | `stateless-relay` |
 | Continua a partir do resumo, não do histórico | `stateless-relay`, `context-caching` |
 
+### 9. 🗺️ Data mapping (legado → novo modelo)
+
+> *"Mapeie as tabelas do schema `legacy` para o novo modelo `billing_v2`. Use hypothesis-loop-engineer."*
+
+| Etapa | Componente / Persona |
+| :--- | :--- |
+| Observa schemas sem dados | `schema-dumper` |
+| Gera hipóteses de correspondência (H1..Hn) | `hypothesis-loop-engineer` (Orchestrator) |
+| Pool de coletores por domínio em paralelo | `persona-forge` → Data Cartographer ×N |
+| Tenta refutar cada mapeamento | Hypothesis Skeptic |
+| Fatos confirmados → `knowledge.md` | memória semântica CoALA |
+| Entrega `mapping.md` + lacunas | Domain Modeler |
+
+### 10. 🏛️ Modernização de sistema legado
+
+> *"Quero extrair o módulo de pagamentos do monolito. Faça o discovery antes."*
+
+| Etapa | Componente / Persona |
+| :--- | :--- |
+| Hipóteses de fronteira e acoplamento | `hypothesis-loop-engineer` |
+| Escavação de imports, rotas, código morto | Legacy Archaeologist + `ast-search` |
+| Uso real via logs | Evidence Collector + `log-tailer` |
+| Bounded contexts e glossário | Domain Modeler |
+| Plano strangler fig + rollback (com aprovação) | Migration Architect + `spec-driven-enforcer` |
+| Testes de caracterização | Test Strategist + `tdd-enforcer` |
+| Extração em patches | Refactor Surgeon + `ponytail` |
+| Revisão | `reviewer-council` |
+
 ### Escolha rápida por perfil
 
 | Perfil | Instale |
@@ -406,6 +503,7 @@ Exemplos de prompts e quais componentes entram em ação. Você não precisa cha
 | **Econômico** (menos tokens) | Caveman, Ponytail, RTK, Log Tailer, AST Search, Flash-Lite Sandwich |
 | **Qualidade** (menos bugs) | TDD, Adversarial Sparring, Spec-Driven, Reviewer Council |
 | **Velocidade** (paralelismo) | Parallel Swarm, Subagent Routing, Jules Delegator |
+| **Discovery / modernização** | Hypothesis Loop Engineer, Persona Forge, Scout, Schema Dumper, AST Search |
 | **Privacidade / offline** | Local DeepSeek Router + Ollama |
 | **Tudo** | Opção A |
 
