@@ -18,7 +18,9 @@
 - [Arquitetura Multi-Agente (Swarm)](#-arquitetura-multi-agente-swarm)
 - [Catálogo Completo](#-catálogo-completo)
 - [Benchmark](#-benchmark)
-- [Setup](#%EF%B8%8F-setup)
+- [Instalação](#%EF%B8%8F-instalação)
+- [Jornadas de Uso](#-jornadas-de-uso)
+- [Licença](#-licença)
 
 ---
 
@@ -221,28 +223,191 @@ sequenceDiagram
 
 ---
 
-## ⚙️ Setup
+## ⚙️ Instalação
 
-Guia completo em **[setup.md](./setup.md)**. Resumo:
+Guia detalhado (Ollama, MCP do Jules) em **[setup.md](./setup.md)**.
+
+### Pré-requisitos
+
+| Requisito | Obrigatório | Usado por |
+| :--- | :---: | :--- |
+| Google Antigravity (IDE, CLI ou App) | ✅ | Todas as regras/skills |
+| `git`, `bash`/`zsh` | ✅ | Instalação, wrappers |
+| `ripgrep` (`brew install ripgrep`) | Recomendado | `ast-search` (usa `grep` como fallback) |
+| Ollama + `deepseek-coder` | Opcional | `local-deepseek-router` |
+| Jules MCP configurado | Opcional | `jules-batch-delegator` |
+
+### Opção A — Instalação global completa (todas as skills, todos os projetos)
 
 ```bash
 git clone https://github.com/Helfstein-one/event-horizon-skill.git
 cd event-horizon-skill
 
-# CLI wrappers
-mkdir -p ~/.local/bin && cp bin/* ~/.local/bin/ && chmod +x ~/.local/bin/*
+# 1. Backup da config existente
+[ -d ~/.gemini/config ] && cp -r ~/.gemini/config ~/.gemini/config.bak-$(date +%s)
 
-# Regras e skills globais do Antigravity
+# 2. Wrappers CLI
+mkdir -p ~/.local/bin && cp bin/* ~/.local/bin/ && chmod +x ~/.local/bin/*
+grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+
+# 3. Regras e skills globais
 mkdir -p ~/.gemini/config/.agents
 cp AGENTS.md ~/.gemini/config/
 cp -r .agents/rules .agents/skills ~/.gemini/config/.agents/
+```
 
-# Opcional: modelo local
-brew install ollama && ollama pull deepseek-coder
+Reinicie o Antigravity.
+
+### Opção B — Por projeto (versionado com o time)
+
+```bash
+cd /caminho/do/seu-projeto
+git clone --depth 1 https://github.com/Helfstein-one/event-horizon-skill.git /tmp/ehs
+mkdir -p .agents
+cp -r /tmp/ehs/.agents/rules /tmp/ehs/.agents/skills .agents/
+cp /tmp/ehs/AGENTS.md ./AGENTS.md
+git add .agents AGENTS.md && git commit -m "chore: add event-horizon skills"
+```
+
+Skills de workspace têm **prioridade** sobre as globais.
+
+### Opção C — À la carte (só o que você precisa)
+
+```bash
+# Exemplo: só economia de input + TDD
+mkdir -p ~/.gemini/config/.agents/skills
+for s in log-tailer dependency-compiler schema-dumper tdd-enforcer; do
+  cp -r .agents/skills/$s ~/.gemini/config/.agents/skills/
+done
+```
+
+Para regras: copie arquivos individuais de `.agents/rules/` para `~/.gemini/config/.agents/rules/`.
+
+### Verificar instalação
+
+```bash
+ls ~/.gemini/config/.agents/skills ~/.gemini/config/.agents/rules
+which rtk ast-search local-deepseek
+rtk ls -la /usr/bin            # deve truncar a saída
+ast-search ./src               # lista só assinaturas
+local-deepseek "diga ok"       # requer Ollama rodando
+```
+
+No chat do Antigravity, pergunte: *"quais skills você tem disponíveis?"* — as skills do pacote devem aparecer.
+
+### Desinstalar
+
+```bash
+rm -rf ~/.gemini/config/.agents/rules/{ponytail,subagent-routing,flash-lite-sandwich,stateless-relay,json-optimizer,context-caching}.md
+cd ~/.gemini/config/.agents/skills && rm -rf log-tailer schema-dumper dependency-compiler pre-linter \
+  commit-summarizer local-deepseek-router jules-batch-delegator tdd-enforcer adversarial-sparring \
+  spec-driven-enforcer scout-librarian react-protocol living-memory parallel-swarm-orchestrator reviewer-council
+rm -f ~/.local/bin/{rtk,ast-search,local-deepseek}
+rm -f ~/.gemini/config/AGENTS.md   # ou restaure o backup
 ```
 
 > [!WARNING]
-> `AGENTS.md` sobrescreve um `AGENTS.md` global existente. Faça backup antes.
+> `AGENTS.md` sobrescreve um `AGENTS.md` existente. Sempre faça backup antes.
+
+---
+
+## 🧭 Jornadas de Uso
+
+Exemplos de prompts e quais componentes entram em ação. Você não precisa chamar as skills pelo nome — as regras `always_on` e as descrições das skills fazem o roteamento. Citar o nome força a ativação.
+
+### 1. 🐛 Debugar um erro em produção
+
+> *"O endpoint /checkout está retornando 500. Investigue os logs em `logs/api.log` e corrija."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Lê só o trecho relevante do log | `log-tailer`, `rtk` |
+| Formula hipótese antes de agir | `react-protocol` |
+| Mapeia quem chama a função quebrada | `scout-librarian`, `ast-search` |
+| Cria teste que reproduz o bug | `tdd-enforcer` |
+| Corrige com patch mínimo | `ponytail` |
+| Registra a correção | `living-memory` |
+
+### 2. ✨ Construir uma feature nova
+
+> *"Adicione autenticação por magic link. Use spec-driven-enforcer."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Gera spec em `.agents/specs/` e pede aprovação | `spec-driven-enforcer` |
+| Mapeia impacto nos módulos existentes | `scout-librarian`, `dependency-compiler` |
+| Testes primeiro | `tdd-enforcer` |
+| Implementação em patches + formatação local | `ponytail`, `pre-linter` |
+| Revisão de segurança e lógica em paralelo | `reviewer-council` |
+| Commit barato | `commit-summarizer` |
+
+### 3. 🏗️ Refatoração massiva
+
+> *"Migre todo o projeto de JavaScript para TypeScript."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Detecta que é pesado/assíncrono | `jules-batch-delegator` |
+| Cria sessão no Jules via MCP | MCP `google-jules` |
+| Agente local fica livre | — |
+
+### 4. 📦 Tarefas em lote independentes
+
+> *"Escreva testes unitários para os 8 componentes em `src/components/`."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Detecta independência entre arquivos | `parallel-swarm-orchestrator` |
+| Dispara N workers Flash em paralelo | `invoke_subagent` (array) |
+| Agrega e revisa | `adversarial-sparring` |
+
+### 5. 🗄️ Trabalhar com banco de dados
+
+> *"Crie uma query que retorne os clientes inativos há 90 dias."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Lê só o schema, sem dados | `schema-dumper` |
+| Gera SQL | Pro (ou `local-deepseek` se trivial) |
+| Resposta em JSON enxuto | `json-optimizer` |
+
+### 6. 🔧 Micro-tarefas do dia a dia
+
+> *"Crie um regex para validar CPF."* / *"Formate este JSON."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Roteia para modelo local (custo zero) | `local-deepseek-router` |
+| Fallback em nuvem barata | `flash-lite-sandwich` |
+
+### 7. 🔍 Onboarding em codebase desconhecida
+
+> *"Explique a arquitetura deste repositório."*
+
+| Etapa | Componente |
+| :--- | :--- |
+| Delega leitura para subagente Flash | `subagent-routing` |
+| Lê só assinaturas | `ast-search`, `dependency-compiler` |
+| Gera/atualiza `ARCHITECTURE.md` | `living-memory` |
+
+### 8. ⏳ Sessões longas
+
+> Conversa com dezenas de iterações.
+
+| Etapa | Componente |
+| :--- | :--- |
+| Após ~5 iterações, grava `state_summary.txt` | `stateless-relay` |
+| Continua a partir do resumo, não do histórico | `stateless-relay`, `context-caching` |
+
+### Escolha rápida por perfil
+
+| Perfil | Instale |
+| :--- | :--- |
+| **Econômico** (menos tokens) | Caveman, Ponytail, RTK, Log Tailer, AST Search, Flash-Lite Sandwich |
+| **Qualidade** (menos bugs) | TDD, Adversarial Sparring, Spec-Driven, Reviewer Council |
+| **Velocidade** (paralelismo) | Parallel Swarm, Subagent Routing, Jules Delegator |
+| **Privacidade / offline** | Local DeepSeek Router + Ollama |
+| **Tudo** | Opção A |
 
 ---
 
