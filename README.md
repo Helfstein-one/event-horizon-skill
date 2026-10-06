@@ -5,35 +5,37 @@
 </p>
 
 <p align="center">
-  <b>Pacote de skills, regras e wrappers CLI para reduzir tokens e aumentar a eficiência de agentes Gemini / Google Antigravity.</b>
+  <b>Framework determinístico de otimização de tokens, governança de ciclo de vida e orquestração multi-agente para Google Antigravity e modelos de linguagem.</b>
 </p>
 
 ---
 
 ## 📌 Índice
 
-- [Filosofia](#-filosofia)
+- [Visão Geral & Filosofia](#-visão-geral--filosofia)
 - [Arquitetura do Repositório](#-arquitetura-do-repositório)
-- [Diagrama de Fluxo](#-diagrama-de-fluxo)
-- [Arquitetura Multi-Agente (Swarm)](#-arquitetura-multi-agente-swarm)
-- [Hypothesis Loop Engineer (CoALA)](#-hypothesis-loop-engineer-coala)
-- [Catálogo Completo](#-catálogo-completo)
-- [Benchmark](#-benchmark)
-- [Instalação](#%EF%B8%8F-instalação)
-- [Jornadas de Uso](#-jornadas-de-uso)
+- [Fluxo Geral do Sistema (Mermaid)](#-fluxo-geral-do-sistema-mermaid)
+- [Camada de Governança Determinística (Lifecycle Hooks)](#-camada-de-governança-determinística-lifecycle-hooks)
+- [Orquestração Multi-Agente & Swarm](#-orquestração-multi-agente--swarm)
+- [Motor de Incerteza & Descoberta: Hypothesis Loop (CoALA)](#-motor-de-incerteza--descoberta-hypothesis-loop-coala)
+- [Catálogo Completo de Componentes](#-catálogo-completo-de-componentes)
+- [Avaliação & Benchmark Empírico (`eval-harness`)](#-avaliação--benchmark-empírico-eval-harness)
+- [Instalação & Configuração](#%EF%B8%8F-instalação--configuração)
+- [Jornadas de Uso na Prática](#-jornadas-de-uso-na-prática)
 - [Licença](#-licença)
 
 ---
 
-## 🧠 Filosofia
+## 🧠 Visão Geral & Filosofia
 
-> **Não pague a IA para fazer trabalho de CPU.**
+> **Princípio Fundamental: Não pague a IA para fazer trabalho determinístico de CPU.**
 
-1. **Ler menos** → comprimir input (logs, dependências, schemas).
-2. **Escrever menos** → patches em vez de arquivos inteiros, zero conversa.
-3. **Pensar no modelo certo** → Pro só para arquitetura; Flash/Flash-Lite/local para o resto.
-4. **Errar menos** → TDD, specs e revisores evitam loops de retrabalho (o maior desperdício real).
-5. **Paralelizar** → tarefas independentes rodam em swarm, não em fila.
+Modelos agênticos consomem de 5× a 30× mais tokens do que chats convencionais devido a loops de tentativa e erro, inspeção cega de logs e reescrita integral de arquivos. O **Event Horizon** resolve isso por meio de quatro pilares:
+
+1. **Governança por Código, Não Apenas Prompts:** Intercepção determinística (`hooks.json`) que bloqueia leituras massivas de arquivos e envelopa ferramentas prolixas antes de atingirem o contexto do modelo.
+2. **Minimização Cirúrgica de E/S:** Leitura via AST/assinaturas e edição restrita a diffs de linha (`replace_file_content`), erradicando a reescrita de arquivos íntegros.
+3. **Estratificação Inteligente de Modelos (Model Tiering):** Roteamento em camadas — tarefas triviais em modelo local gratuito (Ollama / DeepSeek), buscas e parsing em modelos ultrarrápidos/baratos (Flash-Lite / Flash) e raciocínio restrito ao modelo Frontier (Pro).
+4. **Resolução de Incerteza Estruturada:** Eliminação de alucinações repetitivas através do ciclo de hipóteses CoALA com testes discriminantes e agentes adversariais.
 
 ---
 
@@ -41,497 +43,310 @@
 
 ```text
 event-horizon-skill/
-├── AGENTS.md                        # Regra global: Caveman Mode
-├── README.md
-├── setup.md                         # Guia de instalação
+├── AGENTS.md                        # Contrato global consolidado de disciplina e regras
+├── README.md                        # Documentação completa do framework
+├── setup.md                         # Guia detalhado de configuração de ambiente
+├── hooks.json                       # Definição dos hooks de ciclo de vida do Antigravity
+├── LICENSE                          # Licença MIT
 ├── assets/
-│   └── logo.jpg
-├── bin/                             # Wrappers CLI (compressão de input)
-│   ├── rtk                          # Trunca saídas > 150 linhas (head/tail 50)
-│   ├── ast-search                   # Extrai só assinaturas (def/class/function/type)
-│   └── local-deepseek               # Envia prompt ao Ollama local (deepseek-coder)
+│   └── logo.jpg                     # Identidade visual
+├── bin/                             # Ferramentas de linha de comando otimizadas
+│   ├── rtk                          # Rust Token Killer: trunca logs preservando códigos de saída
+│   ├── ast-search                   # Extrator de assinaturas sintáticas (def, class, func)
+│   └── local-deepseek               # Roteador HTTP robusto com parser JSON nativo para Ollama
+├── scripts/
+│   └── hook_pre_tool.py             # Script de validação e overwrite para PreToolUse
+├── evals/                           # Suíte empírica de avaliação e benchmarks
+│   ├── tasks.json                   # Cenários de teste padronizados para auditoria
+│   └── run_evals.py                 # Runner de auditoria de trajetórias e critérios
 └── .agents/
-    ├── rules/                       # Regras sempre ativas
-    │   ├── ponytail.md              # Patch-only
-    │   ├── subagent-routing.md      # Pesquisa → subagente Flash
-    │   ├── flash-lite-sandwich.md   # Micro-tarefas → Flash-Lite
-    │   ├── stateless-relay.md       # Poda de contexto com state_summary
-    │   ├── json-optimizer.md        # JSON com chaves curtas
-    │   ├── context-caching.md       # Reuso de contexto estático
-    │   └── uncertainty-router.md    # Direto / ReAct / Hypothesis Loop
-    └── skills/                      # Skills sob demanda
-        ├── log-tailer/              # Input
-        ├── schema-dumper/           # Input
-        ├── dependency-compiler/     # Input
-        ├── pre-linter/              # Output
-        ├── commit-summarizer/       # Custo
-        ├── local-deepseek-router/   # Custo
-        ├── jules-batch-delegator/   # Custo (MCP Jules)
-        ├── tdd-enforcer/            # Qualidade
-        ├── adversarial-sparring/    # Qualidade
-        ├── spec-driven-enforcer/    # Cognição
-        ├── scout-librarian/         # Cognição
-        ├── react-protocol/          # Cognição
-        ├── living-memory/           # Memória
-        ├── parallel-swarm-orchestrator/  # Multi-agente
-        ├── reviewer-council/        # Multi-agente
-        ├── persona-forge/           # Multi-agente (papéis)
-        └── hypothesis-loop-engineer/ # Motor de incerteza (CoALA)
+    ├── rules/                       # Regras comportamentais declaradas
+    │   ├── context-caching.md       # Aproveitamento de cache de prompt estável
+    │   ├── flash-lite-sandwich.md   # Delegação de micro-tarefas para modelos leves
+    │   ├── json-optimizer.md        # Formatação de saída com chaves concisas
+    │   ├── ponytail.md              # Modificação estrita por patches direcionados
+    │   ├── stateless-relay.md       # Poda de memória longa via resumos de estado
+    │   ├── subagent-routing.md      # Delegação de pesquisas para subagentes Flash
+    │   └── uncertainty-router.md    # Roteamento baseado no grau de incerteza da tarefa
+    └── skills/                      # Habilidades operacionais e cognitivas
+        ├── adversarial-sparring/    # Red-teaming interno antes da entrega
+        ├── commit-summarizer/       # Mensagens de commit atômicas em Flash-Lite
+        ├── dependency-compiler/     # Mapeamento leve de imports e interfaces
+        ├── eval-harness/            # Framework de medição empírica e auditoria
+        ├── hypothesis-loop-engineer/# Ciclo CoALA agnóstico (hipótese/evidência/confirmação)
+        ├── jules-batch-delegator/   # Despacho assíncrono para sessões MCP Jules
+        ├── living-memory/           # Manutenção automática de documentação viva
+        ├── local-deepseek-router/   # Execução offline custo zero via Ollama
+        ├── log-tailer/              # Leitura restrita com tail e filtros contextuais
+        ├── parallel-swarm-orchestrator/# Disparo e agregação de múltiplos subagentes
+        ├── persona-forge/           # Contratos formais de papéis (Role Contracts)
+        ├── pre-linter/              # Delegação de formatação para linters de CPU
+        ├── react-protocol/          # Raciocínio explícito obrigatório antes da ação
+        ├── reviewer-council/        # Pareceres concorrentes em segurança e performance
+        ├── schema-dumper/           # Extração de DDL de bancos sem poluição de dados
+        ├── scout-librarian/         # Mapeamento somente leitura de dependências e impacto
+        └── spec-driven-enforcer/    # Especificação obrigatória prévia à implementação
 ```
 
 ---
 
-## 📊 Diagrama de Fluxo
+## 📊 Fluxo Geral do Sistema (Mermaid)
+
+O diagrama a seguir sintetiza o trajeto de qualquer requisição recebida pelo agente, desde a triagem de incerteza até a validação determinística pelos hooks:
 
 ```mermaid
 flowchart TD
-    User(["Pedido do usuário"]) --> Router{"Classificação da tarefa"}
+    Start(["Requisição do Usuário"]) --> UR{"Classificação de Incerteza<br/>(uncertainty-router)"}
 
-    Router -- "Trivial: regex, formatação, JSON" --> Local["Local DeepSeek via Ollama"]
-    Local --> Out1["Resposta custo zero"]
+    %% Caminho Baixa Incerteza / Local
+    UR -- "Trivial / Regex / Formatação" --> Loc{"Ollama Disponível?"}
+    Loc -- Sim --> OLL["local-deepseek (DeepSeek Coder)"] --> OutLoc["Retorno Custo Zero ($0)"]
+    Loc -- Não --> FL["Subagente Flash-Lite"] --> OutFL["Retorno Econômico"]
 
-    Router -- "Micro-tarefa na nuvem" --> Lite["Flash-Lite"]
+    %% Caminho Carga Pesada / Lote
+    UR -- "Carga Massiva / Refatoração Ampla" --> MCP["Jules Batch Delegator"]
+    MCP --> JulesSess["Sessão Remota em Background (MCP)"]
 
-    Router -- "Refatoração massiva / assíncrona" --> Jules["Jules Batch Delegator - MCP"]
-    Jules --> BG["Sessão Jules em background"]
+    %% Caminho Lote Paralelizável
+    UR -- "Tarefas em Lote Independentes" --> Swarm["Parallel Swarm Orchestrator"]
+    Swarm --> Wk["N Workers Flash em Paralelo"] --> Agg["Agregação de Resultados"]
 
-    Router -- "Lote independente" --> Swarm["Parallel Swarm Orchestrator"]
-    Swarm --> W1["Worker Flash 1"]
-    Swarm --> W2["Worker Flash 2"]
-    Swarm --> W3["Worker Flash N"]
-    W1 --> Agg["Agregação pelo Orquestrador"]
-    W2 --> Agg
-    W3 --> Agg
+    %% Caminho Alta Incerteza
+    UR -- "Alta Incerteza / Bug Complexo" --> HL["Hypothesis Loop Engineer (CoALA)"]
+    HL --> Frame["Definição da Pergunta & Critério"]
+    Frame --> Hyp["Formulação de Hipóteses Falsificáveis"]
+    Hyp --> Pool["Pool Paralelo de Evidências"]
+    Pool --> Eval{"Avaliação / Skeptic"}
+    Eval -- "Refutada / Inconclusiva" --> Hyp
+    Eval -- "Confirmada (≥2 evidências)" --> Kn["knowledge.md"]
+    Kn --> SDD
 
-    Router -- "Lógica complexa" --> Pro["Gemini Pro - Arquiteto"]
-    Pro --> UR{"Uncertainty Router"}
-    UR -- "Alta" --> HL["Hypothesis Loop Engineer"]
-    HL --> SDD
-    UR -- "Baixa/Média" --> SDD["Spec-Driven Enforcer"]
-    SDD -->|"Aprovação do usuário"| Scout["Scout / Librarian"]
-    Scout --> AST["Dependency Compiler + ast-search"]
-    AST -->|"Impact map"| TDD["TDD Enforcer"]
-    TDD --> Code["Patch via Ponytail"]
-    Code --> Lint["Pre-Linter local"]
-    Lint --> Council{"Reviewer Council"}
-    Council -- "Reprovado" --> Code
-    Council -- "Aprovado" --> Mem["Living Memory"]
-    Agg --> Council
-    Mem --> Doc["CHANGELOG / ARCHITECTURE"]
+    %% Caminho Implementação
+    UR -- "Média Incerteza / Nova Feature" --> SDD["Spec-Driven Enforcer"]
+    SDD --> Scout["Scout Librarian (Impact Map)"]
+    Scout --> TDD["TDD Enforcer (Teste Falho)"]
+    TDD --> Code["Geração de Patch (Ponytail)"]
+
+    %% Camada de Governança
+    Code --> HK{"Antigravity Lifecycle Hook<br/>(PreToolUse)"}
+    HK -- "Log gigante desprotegido" --> Deny["Bloqueio Automático (Deny)"]
+    HK -- "Comando longo (npm test/pytest)" --> Rewr["Auto-Wrap com rtk"]
+    HK -- "Operação válida" --> Run["Execução Segura"]
+
+    Run --> Rev{"Reviewer Council / Sparring"}
+    Rev -- "Bugs Encontrados" --> Code
+    Rev -- "Aprovado" --> Mem["Living Memory (Auto-Doc)"]
+    Mem --> End(["Entrega Final ao Usuário"])
 ```
 
 ---
 
-## 🐝 Arquitetura Multi-Agente (Swarm)
+## 🛡️ Camada de Governança Determinística (Lifecycle Hooks)
+
+Diferente de instruções em texto que o modelo pode ignorar em janelas de contexto saturadas, os **Lifecycle Hooks** operam diretamente no runtime do Antigravity via `hooks.json`.
 
 ```mermaid
 sequenceDiagram
-    participant U as Usuário
-    participant O as Orquestrador (Pro)
-    participant W as Workers (Flash, paralelos)
-    participant S as Security Auditor
-    participant P as Performance Architect
+    participant LLM as Modelo (Agente)
+    participant Hook as Runtime Hook (hook_pre_tool.py)
+    participant OS as Sistema / Terminal
 
-    U->>O: Tarefa em lote
-    O->>O: Detecta independência entre subtarefas
-    par Execução paralela
-        O->>W: Subtarefa 1
-        O->>W: Subtarefa 2
-        O->>W: Subtarefa N
-    end
-    W-->>O: Resultados
-    O->>O: Agrega
-    par Reviewer Council
-        O->>S: Auditar segurança
-        O->>P: Auditar lógica/performance
-    end
-    S-->>O: Parecer
-    P-->>O: Parecer
-    O->>O: Resolve conflitos
-    O-->>U: Entrega final
+    LLM->>Hook: Emite tool call: view_file("logs/server.log")
+    Note over Hook: Detecta .log sem StartLine/EndLine
+    Hook-->>LLM: {"decision": "deny", "reason": "Leitura cega de logs bloqueada."}
+
+    LLM->>Hook: Emite tool call: run_command("npm test")
+    Note over Hook: Identifica comando prolixo
+    Hook->>OS: Executa reescrito como: rtk npm test
+    OS-->>Hook: Retorna saída truncada (100 linhas máx) + Exit Code real
+    Hook-->>LLM: Entrega contexto limpo preservando sucesso/falha
 ```
 
-| Papel | Modelo | Responsabilidade |
-| :--- | :--- | :--- |
-| Orquestrador | Pro | Decompor, decidir paralelismo, agregar, resolver conflitos |
-| Workers | Flash | Executar subtarefas independentes em paralelo |
-| Security Auditor | Flash | Vulnerabilidades, edge cases |
-| Performance Architect | Flash | Complexidade, clareza, eficiência |
-
-### 🎭 Personas (`persona-forge`)
-
-Cada subagente recebe um **contrato de papel** (missão, escopo, proibições, método, saída, limite). Personas core são agnósticas; personas de domínio são derivadas sob demanda.
-
-| Persona core | Modelo | Papel |
-| :--- | :--- | :--- |
-| Orchestrator | Pro | Decompõe, atribui personas, decide |
-| Scout | Flash | Mapeia terreno e impacto |
-| Evidence Collector | Flash-Lite | Coleta fatos para uma hipótese |
-| Skeptic | Flash | Tenta refutar |
-| Synthesizer | Flash | Consolida achados |
-| Strategist | Pro | Abordagem, fases, riscos |
-| Test Designer | Flash | Critérios de aceitação/testes |
-| Builder | Flash | Patches do plano aprovado |
-| Reviewer | Flash | Revisão sob uma lente |
-
-| Padrão | Composição |
-| :--- | :--- |
-| Investigar | Orchestrator → Scout → Evidence Collector ×N → Skeptic → Synthesizer |
-| Construir | Orchestrator → Strategist → Test Designer → Builder → Reviewer |
-| Revisar | Orchestrator → Reviewer ×N (lentes) → Synthesizer |
-| Lote | Orchestrator → Builder ×N → Reviewer |
+### Regras Aplicadas pelo Hook (`scripts/hook_pre_tool.py`):
+1. **Proteção Contra Leitura Cega de Logs:** Chamadas a `view_file` apontando para arquivos `.log` sem delimitação de linhas são sumariamente negadas, exigindo que o agente use `log-tailer` ou comandos fatiados.
+2. **Auto-Encapsulamento com `rtk`:** Comandos que tipicamente geram centenas de linhas de logs (`npm test`, `pytest`, `cargo test`, `go test`) são automaticamente reescritos para rodar via `rtk`, poupando tokens de contexto sem depender da memória do agente.
+3. **Bloqueio de Comandos Destrutivos:** Tentativas de deleção ampla (`rm -rf /`, `rm -rf ~`) ou `git push --force` são interceptadas e impedidas.
 
 ---
 
-## 🔬 Hypothesis Loop Engineer (CoALA)
+## 🐝 Orquestração Multi-Agente & Swarm
 
-**Motor de incerteza** do pacote, agnóstico de domínio. Baseado em **CoALA** (*Cognitive Architectures for Language Agents*). Princípio: *nenhuma ação relevante sobre suposição* — toda suposição vira hipótese falsificável, testada com a evidência mais barata, e só vira fato após confirmação.
-
-Serve para qualquer tarefa com incerteza alta: bug sem causa clara, regressão de performance, incidente, decisão de arquitetura, codebase ou sistema desconhecido, pesquisa técnica, comportamento inesperado de dados ou de produto.
-
-### Quando entra em ação (`uncertainty-router`)
-
-| Incerteza | Modo |
-| :--- | :--- |
-| Baixa | Agir direto (`ponytail`) |
-| Média | `react-protocol` |
-| Alta / ≥2 explicações / erro caro | `hypothesis-loop-engineer` |
-| Requisito ambíguo | `ask_question` → `spec-driven-enforcer` |
-
-`react-protocol` escala para o loop após 2 hipóteses falhas.
-
-### Ciclo e integração
+Tarefas que envolvem múltiplos arquivos ou áreas desacopladas não devem ser executadas em filas sequenciais no contexto do modelo principal.
 
 ```mermaid
-flowchart TD
-    R{"uncertainty-router"} -- "Alta" --> F["FRAME - pergunta + critério de resolvido"]
-    R -- "Média" --> RA["react-protocol"]
-    RA -- "2 falhas" --> F
-    F --> O["OBSERVE - sinais baratos"]
-    O --> H["HYPOTHESIZE - 3 a 7 hipóteses falsificáveis"]
-    H --> P["PLAN - teste discriminante"]
-    P --> POOL["POOL - parallel-swarm + persona-forge"]
-    POOL --> T1["Estática: ast-search, scout, schema-dumper"]
-    POOL --> T2["Dinâmica: tdd-enforcer, rtk"]
-    POOL --> T3["Observacional: log-tailer"]
-    POOL --> T4["Massiva: jules-batch-delegator"]
-    T1 --> E{"EVALUATE - adversarial-sparring / reviewer-council"}
-    T2 --> E
-    T3 --> E
-    T4 --> E
-    E -- "Confirmada" --> K["knowledge.md"]
-    E -- "Refutada" --> B["board.md"]
-    E -- "Inconclusiva" --> H
-    K --> X{"Resolvido?"}
-    B --> X
-    X -- "Não" --> O
-    X -- "Sim" --> C["conclusion.md"]
-    C --> S["spec-driven-enforcer"]
-    C --> TB["tdd-enforcer + ponytail"]
-    C --> LM["living-memory"]
+sequenceDiagram
+    participant User as Desenvolvedor
+    participant Orch as Orquestrador (Pro)
+    participant PF as Persona Forge
+    participant W1 as Worker 1 (Flash)
+    participant W2 as Worker 2 (Flash)
+    participant Sec as Security Auditor (Flash)
+    participant Perf as Perf Architect (Flash)
+
+    User->>Orch: "Atualize os 5 controladores de API"
+    Orch->>Orch: Detecta independência dos módulos
+    Orch->>PF: Obtém contratos de persona estritos
+    par Execução Concorrente via invoke_subagent
+        Orch->>W1: Worker 1: Persona Builder (Auth Controller)
+        Orch->>W2: Worker 2: Persona Builder (Order Controller)
+    end
+    W1-->>Orch: Diff conciso concluído
+    W2-->>Orch: Diff conciso concluído
+    Orch->>Orch: Agrega alterações
+    par Reviewer Council
+        Orch->>Sec: Persona Reviewer (Lente: Vulnerabilidades)
+        Orch->>Perf: Persona Reviewer (Lente: Complexidade/Big-O)
+    end
+    Sec-->>Orch: Parecer de Segurança
+    Perf-->>Orch: Parecer de Performance
+    Orch-->>User: Entrega consolidada e validada
 ```
 
-| Memória CoALA | Arquivo |
-| :--- | :--- |
-| Working | `.agents/loops/<slug>/board.md` |
-| Episodic | `.agents/loops/<slug>/log.md` |
-| Semantic | `.agents/loops/<slug>/knowledge.md` |
-| Procedural | skills + `bin/*` |
+---
 
-| Tipo de evidência | Ferramentas |
-| :--- | :--- |
-| Estática | `ast-search`, `dependency-compiler`, `scout-librarian`, `schema-dumper` |
-| Dinâmica | `tdd-enforcer`, `run_command` + `rtk` |
-| Observacional | `log-tailer`, `rtk` |
-| Documental | `living-memory`, `search_web` |
-| Humana | `ask_question` |
+## 🔬 Motor de Incerteza & Descoberta: Hypothesis Loop (CoALA)
 
-**Confirmação:** ≥2 evidências independentes de tipos diferentes, nenhuma contrária, confiança ≥ 0.8.
-**Saída:** critério do FRAME atingido, 5 iterações, ou 2 iterações sem fato novo (pergunta ao usuário).
+Para tarefas investigativas onde a causa-raiz ou arquitetura é desconhecida, o modelo não deve "chutar" alterações no código. O **Hypothesis Loop Engineer** implementa o framework cognitivo **CoALA**:
+
+```mermaid
+stateDiagram-v2
+    [*] --> Frame: Definição da Pergunta & Critério
+    Frame --> Observe: Coleta de Sinais Baratos (AST/Logs)
+    Observe --> Hypothesize: Elaboração de 3 a 7 Hipóteses Falsificáveis
+    Hypothesize --> Plan: Escolha do Teste Discriminante
+    Plan --> Pool: Coleta Concorrente de Evidências (Flash Workers)
+    Pool --> Evaluate: Avaliação Crítica (Hypothesis Skeptic)
+    
+    Evaluate --> Hypothesize: Hipótese Refutada / Inconclusiva
+    Evaluate --> Commit: Hipótese Confirmada (≥2 fontes independentes)
+    
+    Commit --> Check: Critério de Resolução Atingido?
+    Check --> Observe: Não (Próxima iteração)
+    Check --> Handoff: Sim (Máx 5 iterações ou resolvido)
+    Handoff --> [*]: conclusion.md emitido
+```
+
+### Tipologia de Evidências:
+*   **Estática:** Verificação de contratos e dependências (`ast-search`, `dependency-compiler`, `scout-librarian`).
+*   **Dinâmica:** Execução e reprodução por testes controlados (`tdd-enforcer`, `rtk`).
+*   **Observacional:** Rastreamento pontual de eventos e métricas (`log-tailer`).
+*   **Documental:** Cruzamento com documentações ou fontes históricas (`living-memory`, `search_web`).
 
 ---
 
-## 📚 Catálogo Completo
+## 📚 Catálogo Completo de Componentes
 
-| Componente | Tipo | Camada | Mecanismo de economia |
+| Componente | Tipo | Camada | Objetivo & Mecanismo de Economia |
 | :--- | :--- | :--- | :--- |
-| Caveman (`AGENTS.md`) | Regra | Output | Elimina texto conversacional |
-| Ponytail | Regra | Output | Edita só linhas alteradas |
-| JSON Optimizer | Regra | Output | Chaves curtas, menos estrutura |
-| Pre-Linter | Skill | Output | Formatação feita pela CPU |
-| RTK (`bin/rtk`) | CLI | Input | Trunca saídas longas |
-| Log Tailer | Skill | Input | `tail`/`grep` em vez de ler logs inteiros |
-| AST Search (`bin/ast-search`) | CLI | Input | Só assinaturas |
-| Dependency Compiler | Skill | Input | Mapa de dependências sem ler arquivos |
-| Schema Dumper | Skill | Input | Schema sem dados |
-| Stateless Relay | Regra | Input | Resumo de estado em vez de histórico |
-| Context Caching | Regra | Input | Reuso de contexto estático |
-| Subagent Routing | Regra | Custo | Pesquisa em Flash |
-| Flash-Lite Sandwich | Regra | Custo | Micro-tarefas em Flash-Lite |
-| Local DeepSeek Router | Skill + CLI | Custo | Tarefas triviais no Ollama local |
-| Commit Summarizer | Skill | Custo | Commits via Flash-Lite |
-| Jules Batch Delegator | Skill | Custo | Trabalho pesado assíncrono via MCP |
-| TDD Enforcer | Skill | Qualidade | Menos tentativa-e-erro |
-| Adversarial Sparring | Skill | Qualidade | Auto-revisão antes da entrega |
-| Spec-Driven Enforcer | Skill | Cognição | Plano aprovado antes de codar |
-| Scout / Librarian | Skill | Cognição | Mapa de impacto antes de editar |
-| ReAct Protocol | Skill | Cognição | Hipótese antes de agir |
-| Living Memory | Skill | Memória | Docs atualizados = menos releitura futura |
-| Parallel Swarm Orchestrator | Skill | Multi-agente | Paralelismo com workers Flash |
-| Reviewer Council | Skill | Multi-agente | Revisão especializada concorrente |
-| Persona Forge | Skill | Multi-agente | Papéis com escopo e saída fixos = menos ruído entre agentes |
-| Hypothesis Loop Engineer | Skill | Incerteza | Teste discriminante elimina várias hipóteses por vez; fatos confirmados nunca são reinvestigados |
-| Uncertainty Router | Regra | Incerteza | Escolhe o modo mais barato: direto, ReAct ou loop |
+| **`AGENTS.md`** | Regra Base | Global | Diretrizes consolidadas: Caveman Mode, Ponytail patching e roteamento enxuto. |
+| **`hooks.json`** | Runtime | Governança | Intercepção nativa: bloqueio de logs brutos, auto-wrap com `rtk` e portão de segurança. |
+| **`bin/rtk`** | CLI | Input | Trunca saídas com mais de 150 linhas preservando estritamente o código de saída original. |
+| **`bin/ast-search`** | CLI | Input | Extrai exclusivamente declarações e assinaturas (`class`, `def`, `interface`), economizando até 95% do arquivo. |
+| **`bin/local-deepseek`** | CLI | Custo | Wrapper com parser JSON seguro em Python para delegar tarefas ao Ollama local sem custo de API. |
+| **`eval-harness`** | Skill + CLI | Medição | Suíte com `evals/run_evals.py` para mensurar trajetórias reais e evitar regressões de tokens. |
+| **`ponytail`** | Regra | Output | Obriga edições cirúrgicas por bloco (`replace_file_content`), proibindo reescrita total. |
+| **`json-optimizer`** | Regra | Output | Exige estruturas de dados limpas com chaves abreviadas e vetores simplificados. |
+| **`stateless-relay`** | Regra | Contexto | Converte longos históricos de conversa em arquivos sintéticos de resumo (`state_summary.txt`). |
+| **`context-caching`** | Regra | Contexto | Orientação para reutilização de blocos estáticos de contexto e documentação via cache. |
+| **`subagent-routing`** | Regra | Custo | Delega varreduras e leituras amplas a subagentes com modelo Flash. |
+| **`flash-lite-sandwich`** | Regra | Custo | Encaminha formatações básicas e regex para a camada mais econômica (`flash-lite`). |
+| **`uncertainty-router`** | Regra | Incerteza | Classifica tarefas por risco e incerteza, acionando execução direta, ReAct ou o Hypothesis Loop. |
+| **`log-tailer`** | Skill | Input | Proíbe inspeção integral de arquivos `.log`, forçando fatiamento via `tail` ou `grep`. |
+| **`schema-dumper`** | Skill | Input | Exporta apenas definições de tabelas e tipos DDL, sem descarregar linhas de dados. |
+| **`dependency-compiler`**| Skill | Input | Mapeia grafos de dependência e imports sem carregar os arquivos dependentes. |
+| **`pre-linter`** | Skill | Output | Delega alinhamento e regras de estilo a formatadores locais na CPU (Prettier, Black, ESLint). |
+| **`commit-summarizer`** | Skill | Custo | Gera mensagens de commit convencionais usando exclusivamente o modelo `flash-lite`. |
+| **`local-deepseek-router`**| Skill | Custo | Habilidade que orienta o agente a chamar o wrapper `local-deepseek` para operações offline. |
+| **`jules-batch-delegator`**| Skill | Custo | Despacha migrações massivas para a instância do Jules AI via protocolo MCP. |
+| **`tdd-enforcer`** | Skill | Qualidade | Garante a criação de testes falhos prévios para guiar a implementação de forma objetiva. |
+| **`adversarial-sparring`** | Skill | Qualidade | Submete alterações complexas a um revisor crítico antes de exibi-las ao usuário. |
+| **`spec-driven-enforcer`**| Skill | Cognição | Exige a aprovação de uma especificação formal antes do início de codificações de grande porte. |
+| **`scout-librarian`** | Skill | Cognição | Cria relatórios de impacto somente leitura antes de alterações em componentes centrais. |
+| **`react-protocol`** | Skill | Cognição | Força a declaração de hipóteses e raciocínio antes do disparo de ferramentas. |
+| **`living-memory`** | Skill | Memória | Atualiza automaticamente documentações vivas (`CHANGELOG.md`, `ARCHITECTURE.md`). |
+| **`parallel-swarm-orchestrator`** | Skill | Multi-Agente | Decompõe demandas em subtarefas paralelas orquestradas por workers em lote. |
+| **`reviewer-council`** | Skill | Multi-Agente | Conduz auditorias paralelas com personas especializadas (Segurança vs Performance). |
+| **`persona-forge`** | Skill | Multi-Agente | Padroniza contratos de papéis, delimitando escopos, proibições e modelos ideais. |
+| **`hypothesis-loop-engineer`** | Skill | Incerteza | Motor agnóstico CoALA para solução metódica de problemas com alta incerteza. |
 
 ---
 
-## 📈 Benchmark
+## 📈 Avaliação & Benchmark Empírico (`eval-harness`)
 
-> [!IMPORTANT]
-> Os números abaixo são **estimativas de projeto** baseadas em cenários típicos e em relatos públicos — **não** são medições controladas deste repositório. Resultados reais variam conforme projeto, modelo e estilo de uso. Uma análise independente (JetBrains, 2026) mediu ganho de apenas **~8–10%** para modos tipo Caveman isolados em fluxos agênticos, porque a maior parte do output já é código/tool calls. Os ganhos maiores vêm de **input**, **roteamento de modelo** e **menos retrabalho**.
+Para substituir hipóteses teóricas por dados verificáveis, o Event Horizon inclui um framework de auditoria baseado na suíte `evals/`:
 
-### Por operação (estimado)
+```bash
+# Executar a verificação dos cenários de teste da suíte
+python3 evals/run_evals.py
+```
 
-| Operação | Sem pacote | Com pacote | Redução |
-| :--- | ---: | ---: | ---: |
-| Ler log de 15k linhas | ~150k tokens | ~1–2k (`rtk` / `tail`) | ~99% |
-| Entender 10 arquivos importados | ~15–20k | ~0.5–1k (`ast-search`) | ~95% |
-| Editar 3 linhas num arquivo de 800 | ~8k output | ~300 output (patch) | ~95% |
-| Inspecionar banco de dados | ~10k+ (linhas) | ~1k (schema) | ~90% |
-| Mensagem de commit | Pro | Flash-Lite | custo ~-95% |
-| Regex / formatação JSON | Pro | Ollama local | custo $0 |
-| Refatorar 50 arquivos | ~1–2M síncrono | ~200 (despacho MCP) | ~99% local |
-| Resposta conversacional | ~300–800 | ~50–150 | ~70–80% (texto) |
-
-### Por fluxo (estimado)
-
-| Métrica | Sem pacote | Com pacote |
-| :--- | ---: | ---: |
-| Tokens/dia (uso intenso) | ~2.5M | ~250–400k |
-| Tentativas até código funcional | 3–5 | 1–2 |
-| Tempo em lote de 5 tarefas independentes | 5× sequencial | ~1× (paralelo) |
-| Fração de trabalho rodando em Pro | ~100% | ~20–30% |
-
-### Como medir no seu ambiente
-
-1. Escolha 3–5 tarefas reais e repetíveis (ex: corrigir bug, adicionar teste, refatorar módulo).
-2. Rode cada uma **sem** as regras (renomeie `~/.gemini/config/.agents`) e anote tokens/custo do painel de uso.
-3. Restaure as regras e rode as mesmas tarefas.
-4. Compare: tokens de input, tokens de output, número de turnos e custo.
-
-> [!TIP]
-> Contribua com seus resultados via issue/PR para substituir as estimativas por dados medidos.
+### Cenários de Teste Integrados (`evals/tasks.json`):
+1. **`eval-01-log-tail` (Compressão de Entrada):** Verifica se o agente evita carregar arquivos de log inteiros ao debugar falhas.
+2. **`eval-02-patch-edit` (Compressão de Saída):** Audita se correções pontuais utilizam `replace_file_content` em vez de sobrescrever o arquivo com `write_to_file`.
+3. **`eval-03-ast-signature` (Compressão Sintática):** Confirma se a exploração de módulos utiliza `ast-search` para extrair apenas assinaturas.
+4. **`eval-04-tdd-verification` (Garantia de Qualidade):** Valida a sequência temporal estrita: teste criado $\rightarrow$ falha confirmada $\rightarrow$ código implementado $\rightarrow$ teste validado.
+5. **`eval-05-micro-routing` (Otimização de Custos):** Monitora se tarefas básicas (como geração de regex ou parse de JSON) são roteadas para `flash-lite` ou `local-deepseek`.
 
 ---
 
-## ⚙️ Instalação
-
-Guia detalhado (Ollama, MCP do Jules) em **[setup.md](./setup.md)**.
+## ⚙️ Instalação & Configuração
 
 ### Pré-requisitos
+*   **Google Antigravity:** IDE, CLI ou aplicação desktop instalada.
+*   **Ambiente Unix:** macOS ou Linux com `bash` ou `zsh`.
+*   **Python 3:** Necessário para o parser local e hooks.
+*   **Opcionais:** `ripgrep` (para aceleração do `ast-search`) e `ollama` com `deepseek-coder` (para execução local $0).
 
-| Requisito | Obrigatório | Usado por |
-| :--- | :---: | :--- |
-| Google Antigravity (IDE, CLI ou App) | ✅ | Todas as regras/skills |
-| `git`, `bash`/`zsh` | ✅ | Instalação, wrappers |
-| `ripgrep` (`brew install ripgrep`) | Recomendado | `ast-search` (usa `grep` como fallback) |
-| Ollama + `deepseek-coder` | Opcional | `local-deepseek-router` |
-| Jules MCP configurado | Opcional | `jules-batch-delegator` |
-
-### Opção A — Instalação global completa (todas as skills, todos os projetos)
+### Passo a Passo
 
 ```bash
-git clone https://github.com/Helfstein-one/event-horizon-skill.git
-cd event-horizon-skill
+# 1. Clonar o repositório
+git clone https://github.com/Helfstein-one/event-horizon-skill.git ~/dev/event-horizon-skill
+cd ~/dev/event-horizon-skill
 
-# 1. Backup da config existente
-[ -d ~/.gemini/config ] && cp -r ~/.gemini/config ~/.gemini/config.bak-$(date +%s)
-
-# 2. Wrappers CLI
-mkdir -p ~/.local/bin && cp bin/* ~/.local/bin/ && chmod +x ~/.local/bin/*
+# 2. Instalar e autorizar os executáveis CLI
+mkdir -p ~/.local/bin
+cp bin/* ~/.local/bin/
+chmod +x ~/.local/bin/*
 grep -q '.local/bin' ~/.zshrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
 
-# 3. Regras e skills globais
-mkdir -p ~/.gemini/config/.agents
+# 3. Vincular regras, hooks e habilidades ao Antigravity Global
+mkdir -p ~/.gemini/config/.agents/rules ~/.gemini/config/.agents/skills
 cp AGENTS.md ~/.gemini/config/
-cp -r .agents/rules .agents/skills ~/.gemini/config/.agents/
+cp hooks.json ~/.gemini/config/
+cp -r scripts ~/.gemini/config/
+cp -r .agents/rules/* ~/.gemini/config/.agents/rules/
+cp -r .agents/skills/* ~/.gemini/config/.agents/skills/
+
+# 4. (Opcional) Inicializar o servidor DeepSeek local via Ollama
+brew install ollama
+ollama run deepseek-coder:6.7b
 ```
-
-Reinicie o Antigravity.
-
-### Opção B — Por projeto (versionado com o time)
-
-```bash
-cd /caminho/do/seu-projeto
-git clone --depth 1 https://github.com/Helfstein-one/event-horizon-skill.git /tmp/ehs
-mkdir -p .agents
-cp -r /tmp/ehs/.agents/rules /tmp/ehs/.agents/skills .agents/
-cp /tmp/ehs/AGENTS.md ./AGENTS.md
-git add .agents AGENTS.md && git commit -m "chore: add event-horizon skills"
-```
-
-Skills de workspace têm **prioridade** sobre as globais.
-
-### Opção C — À la carte (só o que você precisa)
-
-```bash
-# Exemplo: só economia de input + TDD
-mkdir -p ~/.gemini/config/.agents/skills
-for s in log-tailer dependency-compiler schema-dumper tdd-enforcer; do
-  cp -r .agents/skills/$s ~/.gemini/config/.agents/skills/
-done
-```
-
-Para regras: copie arquivos individuais de `.agents/rules/` para `~/.gemini/config/.agents/rules/`.
-
-### Verificar instalação
-
-```bash
-ls ~/.gemini/config/.agents/skills ~/.gemini/config/.agents/rules
-which rtk ast-search local-deepseek
-rtk ls -la /usr/bin            # deve truncar a saída
-ast-search ./src               # lista só assinaturas
-local-deepseek "diga ok"       # requer Ollama rodando
-```
-
-No chat do Antigravity, pergunte: *"quais skills você tem disponíveis?"* — as skills do pacote devem aparecer.
-
-### Desinstalar
-
-```bash
-rm -rf ~/.gemini/config/.agents/rules/{ponytail,subagent-routing,flash-lite-sandwich,stateless-relay,json-optimizer,context-caching,uncertainty-router}.md
-cd ~/.gemini/config/.agents/skills && rm -rf log-tailer schema-dumper dependency-compiler pre-linter \
-  commit-summarizer local-deepseek-router jules-batch-delegator tdd-enforcer adversarial-sparring \
-  spec-driven-enforcer scout-librarian react-protocol living-memory parallel-swarm-orchestrator reviewer-council \
-  persona-forge hypothesis-loop-engineer
-rm -f ~/.local/bin/{rtk,ast-search,local-deepseek}
-rm -f ~/.gemini/config/AGENTS.md   # ou restaure o backup
-```
-
-> [!WARNING]
-> `AGENTS.md` sobrescreve um `AGENTS.md` existente. Sempre faça backup antes.
 
 ---
 
-## 🧭 Jornadas de Uso
+## 🧭 Jornadas de Uso na Prática
 
-Exemplos de prompts e quais componentes entram em ação. Você não precisa chamar as skills pelo nome — as regras `always_on` e as descrições das skills fazem o roteamento. Citar o nome força a ativação.
+### 1. Investigação de Erro em Ambiente de Execução
+```text
+"O worker de filas parou de processar mensagens e há erros registrados em logs/worker.log. Descubra o motivo e corrija."
+```
+*   **Comportamento:** O hook intercepta tentativas de leitura integral do log. O agente utiliza `rtk` e `log-tailer`, identifica o stack trace nas últimas 40 linhas, gera um teste falho reproduzindo o caso (`tdd-enforcer`) e aplica a correção cirúrgica por patch (`ponytail`).
 
-### 1. 🐛 Debugar um erro em produção
+### 2. Desenvolvimento com Especificação Prévia (Spec-Driven)
+```text
+"Preciso adicionar suporte a webhooks assinados com HMAC-SHA256 na camada de eventos."
+```
+*   **Comportamento:** O `uncertainty-router` aciona o `spec-driven-enforcer`. O agente elabora a especificação técnica em `.agents/specs/`, valida o impacto de dependências com `scout-librarian`, solicita confirmação do usuário e submete o código final à auditoria do `reviewer-council`.
 
-> *"O endpoint /checkout está retornando 500. Investigue os logs em `logs/api.log` e corrija."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Lê só o trecho relevante do log | `log-tailer`, `rtk` |
-| Formula hipótese antes de agir | `react-protocol` |
-| Mapeia quem chama a função quebrada | `scout-librarian`, `ast-search` |
-| Cria teste que reproduz o bug | `tdd-enforcer` |
-| Corrige com patch mínimo | `ponytail` |
-| Registra a correção | `living-memory` |
-
-### 2. ✨ Construir uma feature nova
-
-> *"Adicione autenticação por magic link. Use spec-driven-enforcer."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Gera spec em `.agents/specs/` e pede aprovação | `spec-driven-enforcer` |
-| Mapeia impacto nos módulos existentes | `scout-librarian`, `dependency-compiler` |
-| Testes primeiro | `tdd-enforcer` |
-| Implementação em patches + formatação local | `ponytail`, `pre-linter` |
-| Revisão de segurança e lógica em paralelo | `reviewer-council` |
-| Commit barato | `commit-summarizer` |
-
-### 3. 🏗️ Refatoração massiva
-
-> *"Migre todo o projeto de JavaScript para TypeScript."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Detecta que é pesado/assíncrono | `jules-batch-delegator` |
-| Cria sessão no Jules via MCP | MCP `google-jules` |
-| Agente local fica livre | — |
-
-### 4. 📦 Tarefas em lote independentes
-
-> *"Escreva testes unitários para os 8 componentes em `src/components/`."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Detecta independência entre arquivos | `parallel-swarm-orchestrator` |
-| Dispara N workers Flash em paralelo | `invoke_subagent` (array) |
-| Agrega e revisa | `adversarial-sparring` |
-
-### 5. 🗄️ Trabalhar com banco de dados
-
-> *"Crie uma query que retorne os clientes inativos há 90 dias."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Lê só o schema, sem dados | `schema-dumper` |
-| Gera SQL | Pro (ou `local-deepseek` se trivial) |
-| Resposta em JSON enxuto | `json-optimizer` |
-
-### 6. 🔧 Micro-tarefas do dia a dia
-
-> *"Crie um regex para validar CPF."* / *"Formate este JSON."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Roteia para modelo local (custo zero) | `local-deepseek-router` |
-| Fallback em nuvem barata | `flash-lite-sandwich` |
-
-### 7. 🔍 Onboarding em codebase desconhecida
-
-> *"Explique a arquitetura deste repositório."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Delega leitura para subagente Flash | `subagent-routing` |
-| Lê só assinaturas | `ast-search`, `dependency-compiler` |
-| Gera/atualiza `ARCHITECTURE.md` | `living-memory` |
-
-### 8. ⏳ Sessões longas
-
-> Conversa com dezenas de iterações.
-
-| Etapa | Componente |
-| :--- | :--- |
-| Após ~5 iterações, grava `state_summary.txt` | `stateless-relay` |
-| Continua a partir do resumo, não do histórico | `stateless-relay`, `context-caching` |
-
-### 9. 🔬 Investigar qualquer incerteza
-
-> *"A API ficou 40% mais lenta depois do último deploy e ninguém sabe por quê."*
-> *"Devemos usar fila ou cron para este processamento? Investigue."*
-> *"Este teste falha só no CI."*
-
-| Etapa | Componente |
-| :--- | :--- |
-| Classifica como incerteza alta | `uncertainty-router` |
-| Define pergunta + critério de resolvido | `hypothesis-loop-engineer` (FRAME) |
-| Gera hipóteses concorrentes e teste discriminante | `hypothesis-loop-engineer` |
-| Coleta paralela, 1 persona por hipótese | `parallel-swarm-orchestrator` + `persona-forge` |
-| Evidência estática / dinâmica / observacional | `ast-search`, `tdd-enforcer`, `log-tailer`, `rtk` |
-| Tenta refutar | `adversarial-sparring` / `reviewer-council` |
-| Memória em arquivo, não no chat | `stateless-relay` |
-| Conclusão → ação | `spec-driven-enforcer` ou `tdd-enforcer` + `ponytail` |
-| Fatos duráveis → docs | `living-memory` |
-
-### Escolha rápida por perfil
-
-| Perfil | Instale |
-| :--- | :--- |
-| **Econômico** (menos tokens) | Caveman, Ponytail, RTK, Log Tailer, AST Search, Flash-Lite Sandwich |
-| **Qualidade** (menos bugs) | TDD, Adversarial Sparring, Spec-Driven, Reviewer Council |
-| **Velocidade** (paralelismo) | Parallel Swarm, Subagent Routing, Jules Delegator |
-| **Investigação / incerteza** | Uncertainty Router, Hypothesis Loop Engineer, Persona Forge, Scout, AST Search, Log Tailer |
-| **Privacidade / offline** | Local DeepSeek Router + Ollama |
-| **Tudo** | Opção A |
+### 3. Diagnóstico de Incerteza Complexa
+```text
+"A taxa de requisições com timeout aumentou 30% após o último deploy, mas as métricas de CPU estão normais."
+```
+*   **Comportamento:** O agente ativa o `hypothesis-loop-engineer`. Elabora três hipóteses concorrentes (contenção de conexões no pool, deadlocks em transações ou latência de DNS). Executa coletores em paralelo com subagentes Flash, refuta as hipóteses incorretas e entrega o arquivo `conclusion.md` com a causa comprovada.
 
 ---
 
 ## 📄 Licença
 
-[MIT](./LICENSE)
+Distribuído sob a licença [MIT](./LICENSE).
