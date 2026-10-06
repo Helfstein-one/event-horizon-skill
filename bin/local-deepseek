@@ -1,5 +1,5 @@
 #!/bin/bash
-# Wrapper to query local Ollama (DeepSeek)
+# Wrapper to query local Ollama safely using jq or python
 # Usage: local-deepseek "Prompt here"
 
 if [ -z "$1" ]; then
@@ -9,10 +9,18 @@ fi
 
 PROMPT="$1"
 
-# Query Ollama API locally (assuming default port 11434 and a generic deepseek-coder model name)
-# Feel free to change the model name to exactly what you have pulled (e.g. deepseek-coder:6.7b)
-curl -s -X POST http://localhost:11434/api/generate -d '{
-  "model": "deepseek-coder",
-  "prompt": "'"${PROMPT//\"/\\\"}"'",
-  "stream": false
-}' | grep -o '"response":"[^"]*' | sed 's/"response":"//' | sed 's/\\n/\n/g' | sed 's/\\"/"/g'
+python3 -c '
+import urllib.request, json, sys
+
+prompt = sys.argv[1]
+data = json.dumps({"model": "deepseek-coder", "prompt": prompt, "stream": False}).encode("utf-8")
+req = urllib.request.Request("http://localhost:11434/api/generate", data=data, headers={"Content-Type": "application/json"})
+
+try:
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        res = json.loads(resp.read().decode("utf-8"))
+        print(res.get("response", ""))
+except Exception as e:
+    sys.stderr.write(f"Error querying local Ollama: {e}\n")
+    sys.exit(1)
+' "$PROMPT"

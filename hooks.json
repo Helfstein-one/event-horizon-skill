@@ -1,0 +1,17 @@
+{
+  "event-horizon-gate": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "run_command|view_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/hook_pre_tool.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

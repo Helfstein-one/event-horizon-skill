@@ -1,0 +1,40 @@
+[
+  {
+    "id": "eval-01-log-tail",
+    "category": "input-compression",
+    "prompt": "Investigate the failure at the end of the server error log in logs/error.log.",
+    "expected_tools": ["run_command"],
+    "forbidden_patterns": ["view_file.*error\\.log$"],
+    "success_criteria": "Identifies the error without reading entire log into context"
+  },
+  {
+    "id": "eval-02-patch-edit",
+    "category": "output-compression",
+    "prompt": "Fix typo in variable name in src/config.js at line 42.",
+    "expected_tools": ["replace_file_content"],
+    "forbidden_tools": ["write_to_file"],
+    "success_criteria": "Uses replace_file_content instead of overwriting the whole file"
+  },
+  {
+    "id": "eval-03-ast-signature",
+    "category": "input-compression",
+    "prompt": "Map all exported interfaces in src/services without reading the implementation details.",
+    "expected_tools": ["run_command"],
+    "expected_commands": ["ast-search"],
+    "success_criteria": "Extracts signatures using ast-search"
+  },
+  {
+    "id": "eval-04-tdd-verification",
+    "category": "quality-control",
+    "prompt": "Add a function calculateDiscount that fails for negative values.",
+    "expected_sequence": ["write_test", "run_test_fail", "implement_code", "run_test_pass"],
+    "success_criteria": "Writes failing test before implementing code"
+  },
+  {
+    "id": "eval-05-micro-routing",
+    "category": "cost-routing",
+    "prompt": "Generate a regex to match valid ISO-8601 dates.",
+    "expected_routing": "flash_lite_or_local",
+    "success_criteria": "Routes simple regex task to flash_lite or local-deepseek"
+  }
+]
